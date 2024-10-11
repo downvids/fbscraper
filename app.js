@@ -1,28 +1,18 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const fs = require('fs').promises;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Variables pour l'email et le mot de passe
-const EMAIL = 'gamerzpot12@gmail.com'; // Remplacez par votre email
-const PASSWORD = '8&0@IrCV1s'; // Remplacez par votre mot de passe
-
 app.use(express.json());
-
-// Fonction pour taper le mot de passe caractère par caractère
-async function typePassword(page, password) {
-    for (let char of password) {
-        await page.type('#pass', char, { delay: 100 }); // Délai pour simuler la frappe
-    }
-}
 
 // Fonction pour attendre un certain nombre de millisecondes
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-app.get('/scrape', async (req, res) => {
+app.get('/', async (req, res) => {
     const { profileUrl } = req.query;
 
     if (!profileUrl) {
@@ -30,53 +20,48 @@ app.get('/scrape', async (req, res) => {
     }
 
     try {
+        //Démarrage du navigateur
         console.log('Démarrage du navigateur...');
-        const browser = await puppeteer.launch({ headless: true }); // Passer à false pour voir le navigateur
+        const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
+        console.log('Démarrage du navigateur OK');
 
-        console.log('Accès à Facebook...');
-        await page.goto('https://www.facebook.com', { waitUntil: 'networkidle2' });
-
-        console.log('Tentative d\'acceptation des cookies...');
-        await Promise.all([
-            page.waitForSelector('div[aria-label="Autoriser tous les cookies"]', { timeout: 5000 }),
-            wait(1000) // Utiliser la fonction wait pour un délai
-        ]);
+        //Set cookies
+        console.log('Set cookies...');
+        const cookies = JSON.parse(await fs.readFile('./cookies.json'));
+        await page.setCookie(...cookies);
+        console.log('Set cookies OK');
         
-        await page.click('div[aria-label="Autoriser tous les cookies"]');
-        console.log('Cookies acceptés.');
 
-        console.log('Connexion à Facebook...');
-        await page.type('#email', EMAIL); // Utilisation de la variable EMAIL
-        await typePassword(page, PASSWORD); // Utilisation de la variable PASSWORD
-        await page.click('[name="login"]');
+        //Set User-Agent
+        console.log('Set User-Agent...');
+        const customUA = 'Mozilla/5.0 (Linux; U; Android 2.2; fr-fr; Desire_A8181 Build/FRF91) App3leWebKit/53.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1';
+        await page.setUserAgent(customUA);
+        console.log('Set User-Agent OK');
 
-        console.log('Attente de la navigation...');
-        await page.waitForNavigation({ timeout: 80000 }); // Augmenter le délai d'attente
+        //Got to profile FB
+        console.log('Go to profile FB...');
+        await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 80000 });
+        console.log('Go to profile FB OK');
 
-        console.log(`Accès au profil: ${profileUrl}`);
-        await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 80000 }); // Augmenter le délai d'attente
-
-        
-        console.log('Récupération du HTML...');
-        const html = await page.content();
-    
-        console.log('test recupe image...');
-        await page.waitForSelector('img[alt*=", profile picture"]', {visible: true});
-        const imgProf = await page.$eval('img[alt*=", profile picture"]', el => el.src);
+        //Récuperation de l'image de profile
+        console.log('Recuperation image...');
+        await page.waitForSelector('img[class*="img contain rounded gray-border"]', {visible: true});
+        const imgProf = await page.$eval('img[class*="img contain rounded gray-border"]', el => el.src);
         console.log(imgProf);
+        console.log('Recuperation image OK');
 
-        
-
+        //Ferme le navigateur et renvoie json
         await browser.close();
-        res.json({urlProfile: imgProf});
+        res.json({imgProfile: imgProf});
+
     } catch (error) {
-        console.error('Error:', error.message || error); // Afficher l'erreur dans la console
-        res.status(500).json({ error: 'An error occurred while scraping the profile.', details: error.message || error });
+        {
+            imgProfile: 'https://i.sstatic.net/l60Hf.png'
+        }
+        res.json();
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => {});
 
