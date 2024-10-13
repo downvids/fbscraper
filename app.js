@@ -1,4 +1,5 @@
 const express = require('express');
+var cors = require('cors')
 const puppeteer = require('puppeteer');
 const fs = require('fs').promises;
 
@@ -12,7 +13,7 @@ function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-app.get('/', async (req, res) => {
+app.get('/', cors(), async (req, res) => {
     const { profileUrl } = req.query;
 
     if (!profileUrl) {
